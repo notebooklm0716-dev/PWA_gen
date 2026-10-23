@@ -3,453 +3,572 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>日付選択カレンダー</title>
+    <title>汎用 PWA ジェネレーター</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts Inter -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- PWA manifest.jsonの読み込みを追加 -->
-    <!-- 【更新】サブディレクトリや多様な環境（ローカル等）でも正しくマニフェストを読み込めるよう、絶対パスから相対パスへ修正しました -->
-    <link rel="manifest" href="./manifest.json">
-    <!-- iOSでのホーム画面追加時に使用するapple-touch-iconを追加 -->
-    <!-- 【更新】iOSでのホーム画面追加時にアイコンを正しく読み込めるよう、絶対パスから相対パスへ修正しました -->
-    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
-    <!-- ブラウザタブ用ファビコンとしてicon.svgの読み込みを追加 -->
-    <!-- 【更新】ブラウザタブ用ファビコンを正しく読み込めるよう、絶対パスから相対パスへ修正しました -->
-    <link rel="icon" type="image/svg+xml" href="./icon.svg">
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-        /* Custom smooth transition for toggle */
-        .date-cell {
-            transition: all 0.2s ease-in-out;
-        }
+        body { font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
-<body class="bg-gradient-to-br from-slate-50 to-slate-100 min-h-screen flex flex-col items-center justify-center p-4">
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
 
-    <div class="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100 flex flex-col">
+    <!-- Header -->
+    <header class="bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            <div class="bg-indigo-600 p-2.5 rounded-xl text-white shadow-md">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-white">汎用 PWA ジェネレーター</h1>
+                <p class="text-xs text-slate-400">任意の index.html をアップロードして PWA 化（manifest.json / sw.js / index.html 生成）</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="download-all-btn" class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2.5 rounded-xl text-sm font-semibold transition shadow-lg flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                </svg>
+                全3ファイル一括ダウンロード
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        <!-- Header: Month Navigation & ICS Import with Down Arrow Icon -->
-        <div class="bg-indigo-600 text-white p-6 flex items-center justify-between">
-            <button id="prev-month" class="p-2 rounded-full hover:bg-indigo-700 transition active:scale-95 focus:outline-none" aria-label="前月">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
-                </svg>
-            </button>
+        <!-- Left Column: Settings & Upload -->
+        <div class="lg:col-span-5 flex flex-col gap-5">
             
-            <div class="flex items-center gap-2">
-                <h1 id="month-title" class="text-xl font-bold tracking-wide">2026年 10月</h1>
-                <!-- ICS File Import Button with Down Arrow -->
-                <label for="ics-file-input" class="cursor-pointer p-2 rounded-full hover:bg-indigo-700 transition active:scale-95 text-indigo-100 hover:text-white" title="ICSファイルをインポート">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-                    </svg>
-                </label>
-                <input type="file" id="ics-file-input" accept=".ics" class="hidden">
-            </div>
-
-            <button id="next-month" class="p-2 rounded-full hover:bg-indigo-700 transition active:scale-95 focus:outline-none" aria-label="次月">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                </svg>
-            </button>
-        </div>
-
-        <div class="p-6 flex-1 flex flex-col">
-            <!-- Day of week headers -->
-            <div class="grid grid-cols-7 gap-2 mb-3 text-center">
-                <div class="text-rose-500 font-semibold text-sm">日</div>
-                <div class="text-slate-600 font-semibold text-sm">月</div>
-                <div class="text-slate-600 font-semibold text-sm">火</div>
-                <div class="text-slate-600 font-semibold text-sm">水</div>
-                <div class="text-slate-600 font-semibold text-sm">木</div>
-                <div class="text-slate-600 font-semibold text-sm">金</div>
-                <div class="text-blue-500 font-semibold text-sm">土</div>
-            </div>
-
-            <!-- Calendar Days Grid -->
-            <div id="calendar-grid" class="grid grid-cols-7 gap-2 auto-rows-fr">
-                <!-- Dynamically populated by JS -->
-            </div>
-        </div>
-
-        <div class="bg-slate-50 border-t border-slate-100 p-6 flex flex-col gap-3">
-            
-            <!-- Event Title Display Area (Above Selected Dates) -->
-            <div class="flex flex-col gap-1">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">予定タイトル</span>
-                <div id="event-title-text" class="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-700 font-medium truncate min-h-[42px] flex items-center shadow-sm">
-                    <span class="text-slate-400 italic">日付を選択してください</span>
-                </div>
-            </div>
-
-            <div class="flex items-center justify-between pt-1">
-                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">選択された日付</span>
-                <span id="selected-count" class="text-xs font-medium text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">0件選択</span>
-            </div>
-            
-            <div class="flex items-center gap-3">
-                <!-- Text display container -->
-                <div id="selected-dates-text" class="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 font-medium truncate select-all min-h-[46px] flex items-center shadow-sm">
-                    <span class="text-slate-400 italic">日付を選択してください</span>
+            <!-- 1. File Upload Area -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl flex flex-col gap-3">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2.5">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 0115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                        </svg>
+                        1. index.html を読み込み <span class="text-rose-400">*必須</span>
+                    </h2>
                 </div>
                 
-                <!-- Clipboard Copy Button -->
-                <button id="copy-btn" class="bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-medium px-4 py-3 rounded-xl transition shadow-md hover:shadow-lg flex items-center justify-center shrink-0 focus:outline-none" title="クリップボードにコピー">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+                <label id="drop-zone" for="html-file-input" class="border-2 border-dashed border-slate-600 hover:border-indigo-500 bg-slate-900/50 hover:bg-slate-900 transition rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer text-center group">
+                    <svg class="w-9 h-9 text-slate-400 group-hover:text-indigo-400 mb-2 transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
                     </svg>
-                </button>
+                    <span class="text-xs font-semibold text-slate-200">クリックして index.html を選択</span>
+                    <span class="text-[11px] text-slate-400 mt-1">またはファイルをここにドラッグ＆ドロップ</span>
+                    <span id="uploaded-file-name" class="text-xs text-emerald-400 font-mono font-medium mt-2.5 bg-emerald-950/60 border border-emerald-800 px-3 py-1 rounded-lg hidden"></span>
+                </label>
+                <input type="file" id="html-file-input" accept=".html,.htm" class="hidden">
+                <p id="file-error-msg" class="text-xs text-rose-400 font-medium hidden">※ index.html を読み込んでください</p>
             </div>
+
+            <!-- 2. Manifest Settings -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2.5">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        2. manifest.json 設定
+                    </h2>
+                </div>
+
+                <!-- Name Input -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                        アプリ名 (name) <span class="text-rose-400">*必須</span>
+                    </label>
+                    <input type="text" id="input-name" placeholder="例: My Application" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition">
+                    <span id="err-name" class="text-[11px] text-rose-400 hidden">アプリ名を入力してください</span>
+                </div>
+
+                <!-- Short Name Input -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                        短縮アプリ名 (short_name) <span class="text-rose-400">*必須</span>
+                    </label>
+                    <input type="text" id="input-short-name" placeholder="例: MyApp" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition">
+                    <span id="err-short-name" class="text-[11px] text-rose-400 hidden">短縮アプリ名を入力してください</span>
+                </div>
+
+                <!-- Description Input -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                        説明文 (description) <span class="text-rose-400">*必須</span>
+                    </label>
+                    <textarea id="input-description" rows="2" placeholder="例: アプリの説明文を入力します" class="bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition resize-none"></textarea>
+                    <span id="err-description" class="text-[11px] text-rose-400 hidden">説明文を入力してください</span>
+                </div>
+            </div>
+
+            <!-- 3. Service Worker Settings -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl flex flex-col gap-4">
+                <div class="flex items-center justify-between border-b border-slate-700 pb-2.5">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                        </svg>
+                        3. sw.js 設定
+                    </h2>
+                </div>
+
+                <!-- Prefix Input -->
+                <div class="flex flex-col gap-1">
+                    <label class="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                        キャッシュ共通部 (プレフィックス) <span class="text-rose-400">*必須</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="input-prefix" placeholder="例: my-app" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition">
+                        <span class="text-xs text-slate-400 font-mono bg-slate-900 px-2.5 py-2 border border-slate-700 rounded-xl">-pwa-v1</span>
+                    </div>
+                    <span id="err-prefix" class="text-[11px] text-rose-400 hidden">キャッシュ識別子を入力してください（半角英数字・ハイフン）</span>
+                </div>
+            </div>
+
         </div>
-    </div>
+
+        <!-- Right Column: Code Previews & Downloads -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+            
+            <!-- File Selector Tabs -->
+            <div class="flex items-center gap-2 border-b border-slate-700 pb-2">
+                <button onclick="switchTab('index')" id="tab-index" class="px-4 py-2 rounded-xl text-sm font-semibold transition bg-indigo-600 text-white shadow-md">index.html</button>
+                <button onclick="switchTab('manifest')" id="tab-manifest" class="px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">manifest.json</button>
+                <button onclick="switchTab('sw')" id="tab-sw" class="px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700">sw.js</button>
+            </div>
+
+            <!-- File Preview Card -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl shadow-xl flex flex-col overflow-hidden flex-1 min-h-[450px]">
+                
+                <!-- Card Header -->
+                <div class="bg-slate-900/80 px-5 py-3 border-b border-slate-700 flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                        <span id="current-filename" class="text-sm font-mono font-bold text-indigo-400">index.html</span>
+                        <span id="validation-status" class="text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-rose-500/20 text-rose-300 border border-rose-500/30">入力未完了</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button id="copy-code-btn" class="bg-slate-700 hover:bg-slate-600 active:scale-95 text-slate-200 px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path>
+                            </svg>
+                            コードコピー
+                        </button>
+                        <button id="download-file-btn" class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 text-white px-3.5 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 shadow">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
+                            このファイルをダウンロード
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Code View Area -->
+                <div class="flex-1 relative bg-slate-950 p-4 font-mono text-xs text-slate-300 overflow-x-auto max-h-[500px] overflow-y-auto">
+                    <pre><code id="code-output" class="whitespace-pre"></code></pre>
+                </div>
+            </div>
+
+        </div>
+
+    </main>
 
     <!-- Toast Notification -->
-    <div id="toast" class="fixed bottom-8 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-sm font-medium opacity-0 pointer-events-none transition-all duration-300 transform translate-y-4 flex items-center gap-2">
-        <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <div id="toast" class="fixed bottom-8 right-8 bg-slate-800 border border-slate-700 text-white px-4 py-3 rounded-xl shadow-2xl text-sm font-medium opacity-0 pointer-events-none transition-all duration-300 transform translate-y-4 flex items-center gap-2.5 z-50">
+        <svg id="toast-icon" class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
         </svg>
-        <span id="toast-message">クリップボードにコピーしました</span>
+        <span id="toast-message">操作が完了しました</span>
     </div>
 
+    <!-- Generator Script -->
     <script>
-        let currentDate = new Date(2026, 9, 1); // October 2026 as initial view
-        let selectedDates = new Set();
-        let icsEventsMap = {}; // Map of 'YYYY-MM-DD' -> array of titles
-        let lastSelectedDateStr = null; // Track last clicked date for title display
+        // DOM Elements
+        const inputName = document.getElementById('input-name');
+        const inputShortName = document.getElementById('input-short-name');
+        const inputDescription = document.getElementById('input-description');
+        const inputPrefix = document.getElementById('input-prefix');
 
-        const monthTitle = document.getElementById('month-title');
-        const calendarGrid = document.getElementById('calendar-grid');
-        const selectedDatesText = document.getElementById('selected-dates-text');
-        const eventTitleText = document.getElementById('event-title-text');
-        const selectedCount = document.getElementById('selected-count');
-        const copyBtn = document.getElementById('copy-btn');
-        const prevMonthBtn = document.getElementById('prev-month');
-        const nextMonthBtn = document.getElementById('next-month');
-        const icsFileInput = document.getElementById('ics-file-input');
+        const errName = document.getElementById('err-name');
+        const errShortName = document.getElementById('err-short-name');
+        const errDescription = document.getElementById('err-description');
+        const errPrefix = document.getElementById('err-prefix');
+        const fileErrorMsg = document.getElementById('file-error-msg');
+
+        const htmlFileInput = document.getElementById('html-file-input');
+        const uploadedFileName = document.getElementById('uploaded-file-name');
+        const dropZone = document.getElementById('drop-zone');
+
+        const codeOutput = document.getElementById('code-output');
+        const currentFilename = document.getElementById('current-filename');
+        const validationStatus = document.getElementById('validation-status');
+        const copyCodeBtn = document.getElementById('copy-code-btn');
+        const downloadFileBtn = document.getElementById('download-file-btn');
+        const downloadAllBtn = document.getElementById('download-all-btn');
         const toast = document.getElementById('toast');
         const toastMessage = document.getElementById('toast-message');
 
-        // Initialize calendar on window load
-        window.onload = function() {
-            renderCalendar();
-            setupEventListeners();
-            // PWAアプリとしてオフラインでも動作させ、キャッシュを有効にするためService Workerの登録処理を追加
-            registerServiceWorker();
-        };
+        let rawUserHtml = null; // Stores uploaded html string
+        let activeTab = 'index'; // 'index', 'manifest', 'sw'
 
-        // Service Worker登録用関数を追加
-        function registerServiceWorker() {
-            if ('serviceWorker' in navigator) {
-                // 【更新】サブディレクトリや多様な環境（ローカル等）でService Workerを正しく登録できるよう、絶対パスから相対パスへ修正しました
-                navigator.serviceWorker.register('./sw.js')
-                    .then((reg) => {
-                        console.log('Service Worker registered successfully:', reg.scope);
-                    })
-                    .catch((err) => {
-                        console.error('Service Worker registration failed:', err);
-                    });
+        // Attach listeners for live validation and rendering
+        [inputName, inputShortName, inputDescription, inputPrefix].forEach(input => {
+            input.addEventListener('input', updateOutputs);
+        });
+
+        // File upload handling
+        htmlFileInput.addEventListener('change', handleFileSelect);
+
+        // Drag and drop handling
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-indigo-500', 'bg-slate-800');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-indigo-500', 'bg-slate-800');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-indigo-500', 'bg-slate-800');
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        function handleFileSelect(e) {
+            if (e.target.files && e.target.files[0]) {
+                processFile(e.target.files[0]);
             }
         }
 
-        function setupEventListeners() {
-            prevMonthBtn.addEventListener('click', () => {
-                currentDate.setMonth(currentDate.getMonth() - 1);
-                renderCalendar();
-            });
-
-            nextMonthBtn.addEventListener('click', () => {
-                currentDate.setMonth(currentDate.getMonth() + 1);
-                renderCalendar();
-            });
-
-            copyBtn.addEventListener('click', copyToClipboard);
-            icsFileInput.addEventListener('change', handleIcsUpload);
-        }
-
-        function handleIcsUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
+        function processFile(file) {
+            if (!file.name.endsWith('.html') && !file.name.endsWith('.htm')) {
+                showToast("HTMLファイルを選択してください", true);
+                return;
+            }
             const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    parseIcsData(e.target.result);
-                    showToast("ICSファイルをインポートしました");
-                    renderCalendar(); // Re-render to show red dots on imported event dates
-                } catch (err) {
-                    showToast("ICSファイルの解析に失敗しました", true);
-                }
-                // Reset file input so the same file can be selected again if needed
-                icsFileInput.value = '';
+            reader.onload = function(evt) {
+                rawUserHtml = evt.target.result;
+                uploadedFileName.textContent = '読み込み完了: ' + file.name;
+                uploadedFileName.classList.remove('hidden');
+                fileErrorMsg.classList.add('hidden');
+                showToast('「' + file.name + '」を読み込みました');
+                updateOutputs();
             };
             reader.readAsText(file);
         }
 
-        function parseIcsData(icsText) {
-            icsEventsMap = {}; // Reset map
-            // Unfold folded lines in ICS (lines starting with space or tab)
-            const unfolded = icsText.replace(/\r\n[ \t]|\n[ \t]/g, '');
-            const lines = unfolded.split(/\r\n|\n|\r/);
-
-            let inEvent = false;
-            let currentSummary = '';
-            let currentStartDate = '';
-
-            for (let line of lines) {
-                line = line.trim();
-                if (line === 'BEGIN:VEVENT') {
-                    inEvent = true;
-                    currentSummary = '';
-                    currentStartDate = '';
-                } else if (line === 'END:VEVENT') {
-                    if (currentStartDate && currentSummary) {
-                        if (!icsEventsMap[currentStartDate]) {
-                            icsEventsMap[currentStartDate] = [];
-                        }
-                        if (!icsEventsMap[currentStartDate].includes(currentSummary)) {
-                            icsEventsMap[currentStartDate].push(currentSummary);
-                        }
-                    }
-                    inEvent = false;
-                } else if (inEvent) {
-                    if (line.startsWith('SUMMARY:')) {
-                        currentSummary = line.substring(8).trim();
-                        // Unescape commas and semicolons in ICS text if necessary
-                        currentSummary = currentSummary.replace(/\\,/g, ',').replace(/\\;/g, ';');
-                    } else if (line.startsWith('DTSTART')) {
-                        const parts = line.split(':');
-                        if (parts.length >= 2) {
-                            const dateVal = parts.slice(1).join(':').trim();
-                            currentStartDate = parseIcsDate(dateVal);
-                        }
-                    }
-                }
-            }
-
-            // If a date was previously selected, update the title display immediately with new data
-            if (lastSelectedDateStr) {
-                updateEventTitleDisplay(lastSelectedDateStr);
-            }
-        }
-
-        function parseIcsDate(dateVal) {
-            dateVal = dateVal.trim();
-            if (dateVal.includes('T')) {
-                const year = parseInt(dateVal.substring(0, 4), 10);
-                const month = parseInt(dateVal.substring(4, 6), 10) - 1;
-                const day = parseInt(dateVal.substring(6, 8), 10);
-                const hour = parseInt(dateVal.substring(9, 11) || 0, 10);
-                const min = parseInt(dateVal.substring(11, 13) || 0, 10);
-                const sec = parseInt(dateVal.substring(13, 15) || 0, 10);
-
-                if (dateVal.endsWith('Z')) {
-                    // UTC time correctly converted to local date
-                    const d = new Date(Date.UTC(year, month, day, hour, min, sec));
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const ds = String(d.getDate()).padStart(2, '0');
-                    return `${y}-${m}-${ds}`;
-                } else {
-                    // Local floating time
-                    const y = year;
-                    const m = String(month + 1).padStart(2, '0');
-                    const ds = String(day).padStart(2, '0');
-                    return `${y}-${m}-${ds}`;
-                }
-            } else if (dateVal.length >= 8) {
-                // Pure date VALUE=DATE
-                const year = dateVal.substring(0, 4);
-                const month = dateVal.substring(4, 6);
-                const day = dateVal.substring(6, 8);
-                return `${year}-${month}-${day}`;
-            }
-            return null;
-        }
-
-        function renderCalendar() {
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-
-            // Update Header Title
-            const monthNames = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"];
-            monthTitle.textContent = `${year}年 ${monthNames[month]}`;
-
-            // Clear previous grid
-            calendarGrid.innerHTML = '';
-
-            // Get first day of the month and total days in month
-            const firstDayIndex = new Date(year, month, 1).getDay();
-            const totalDays = new Date(year, month + 1, 0).getDate();
-            const prevTotalDays = new Date(year, month, 0).getDate();
-
-            // Render padding days from previous month
-            for (let i = firstDayIndex - 1; i >= 0; i--) {
-                const dayNum = prevTotalDays - i;
-                const cell = createDayCell(dayNum, true, null);
-                calendarGrid.appendChild(cell);
-            }
-
-            // Render current month days (ICS import does NOT color dates automatically, but shows red dots)
-            for (let day = 1; day <= totalDays; day++) {
-                const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const isSelected = selectedDates.has(dateStr);
-                const cell = createDayCell(day, false, dateStr, isSelected);
-                calendarGrid.appendChild(cell);
-            }
-
-            // Render remaining days for grid alignment (next month padding)
-            const totalCellsRendered = firstDayIndex + totalDays;
-            const remainingCells = (totalCellsRendered % 7 === 0) ? 0 : 7 - (totalCellsRendered % 7);
-            for (let i = 1; i <= remainingCells; i++) {
-                const cell = createDayCell(i, true, null);
-                calendarGrid.appendChild(cell);
-            }
-
-            updateSelectedDisplay();
-        }
-
-        function createDayCell(dayNumber, isPadding, dateStr, isSelected = false) {
-            const cell = document.createElement('div');
-            cell.className = "aspect-square flex flex-col items-center justify-center rounded-xl text-sm font-medium select-none date-cell relative";
-
-            if (isPadding) {
-                cell.classList.add('text-slate-300', 'cursor-default');
-                const span = document.createElement('span');
-                span.textContent = dayNumber;
-                cell.appendChild(span);
-            } else {
-                cell.classList.add('cursor-pointer');
-
-                if (isSelected) {
-                    cell.classList.add('bg-indigo-600', 'text-white', 'shadow-md', 'scale-105');
-                } else {
-                    cell.classList.add('text-slate-700', 'hover:bg-slate-100');
-                }
-
-                // Day number text
-                const span = document.createElement('span');
-                span.textContent = dayNumber;
-                cell.appendChild(span);
-
-                // Small red dot if ICS event exists for this date
-                if (dateStr && icsEventsMap[dateStr] && icsEventsMap[dateStr].length > 0) {
-                    const dot = document.createElement('div');
-                    dot.className = `w-1.5 h-1.5 rounded-full absolute bottom-1.5 ${isSelected ? 'bg-rose-300' : 'bg-rose-500'}`;
-                    cell.appendChild(dot);
-                }
-
-                // Toggle click event and title display update
-                cell.addEventListener('click', () => {
-                    // Toggle selection state
-                    if (selectedDates.has(dateStr)) {
-                        selectedDates.delete(dateStr);
-                    } else {
-                        selectedDates.add(dateStr);
-                    }
-
-                    // Update tracked last selected date and show title
-                    lastSelectedDateStr = dateStr;
-                    updateEventTitleDisplay(dateStr);
-
-                    renderCalendar();
-                });
-            }
-
-            return cell;
-        }
-
-        function updateEventTitleDisplay(dateStr) {
-            if (icsEventsMap[dateStr] && icsEventsMap[dateStr].length > 0) {
-                const titles = icsEventsMap[dateStr].join(', ');
-                eventTitleText.innerHTML = `<span class="text-slate-800 font-semibold">${titles}</span>`;
-            } else {
-                eventTitleText.innerHTML = `<span class="text-slate-400 italic">この日の予定はありません</span>`;
-            }
-        }
-
-        function updateSelectedDisplay() {
-            const sortedDates = Array.from(selectedDates).sort();
-            const dayNumbers = sortedDates.map(dateStr => {
-                const parts = dateStr.split('-');
-                return parseInt(parts[2], 10);
+        function switchTab(tab) {
+            activeTab = tab;
+            ['index', 'manifest', 'sw'].forEach(t => {
+                const btn = document.getElementById('tab-' + t);
+                btn.className = (t === tab)
+                    ? "px-4 py-2 rounded-xl text-sm font-semibold transition bg-indigo-600 text-white shadow-md"
+                    : "px-4 py-2 rounded-xl text-sm font-semibold transition bg-slate-800 text-slate-300 hover:bg-slate-700";
             });
-
-            if (dayNumbers.length > 0) {
-                selectedDatesText.innerHTML = `<span class="text-slate-800 font-semibold">${dayNumbers.join(',')}</span>`;
-                selectedCount.textContent = `${dayNumbers.length}件選択`;
-            } else {
-                selectedDatesText.innerHTML = `<span class="text-slate-400 italic">日付を選択してください</span>`;
-                selectedCount.textContent = `0件選択`;
-            }
+            updateOutputs();
         }
 
-        function copyToClipboard() {
-            const sortedDates = Array.from(selectedDates).sort();
-            const dayNumbers = sortedDates.map(dateStr => {
-                const parts = dateStr.split('-');
-                return parseInt(parts[2], 10);
-            });
+        // Validate form fields
+        function validateForm() {
+            let isValid = true;
 
-            if (dayNumbers.length === 0) {
-                showToast("コピーする日付がありません", true);
+            // Check raw user HTML
+            if (!rawUserHtml) {
+                fileErrorMsg.classList.remove('hidden');
+                isValid = false;
+            } else {
+                fileErrorMsg.classList.add('hidden');
+            }
+
+            // Check inputs
+            if (!inputName.value.trim()) {
+                errName.classList.remove('hidden');
+                isValid = false;
+            } else {
+                errName.classList.add('hidden');
+            }
+
+            if (!inputShortName.value.trim()) {
+                errShortName.classList.remove('hidden');
+                isValid = false;
+            } else {
+                errShortName.classList.add('hidden');
+            }
+
+            if (!inputDescription.value.trim()) {
+                errDescription.classList.remove('hidden');
+                isValid = false;
+            } else {
+                errDescription.classList.add('hidden');
+            }
+
+            if (!inputPrefix.value.trim()) {
+                errPrefix.classList.remove('hidden');
+                isValid = false;
+            } else {
+                errPrefix.classList.add('hidden');
+            }
+
+            // Update Status UI
+            if (isValid) {
+                validationStatus.textContent = "ダウンロード可能";
+                validationStatus.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30";
+                downloadFileBtn.disabled = false;
+                downloadAllBtn.disabled = false;
+            } else {
+                validationStatus.textContent = "入力・選択未完了";
+                validationStatus.className = "text-[11px] px-2.5 py-0.5 rounded-full font-medium bg-rose-500/20 text-rose-300 border border-rose-500/30";
+                downloadFileBtn.disabled = true;
+                downloadAllBtn.disabled = true;
+            }
+
+            return isValid;
+        }
+
+        function getManifestContent() {
+            const name = inputName.value.trim() || "(アプリ名を入力してください)";
+            const shortName = inputShortName.value.trim() || "(短縮名を入力してください)";
+            const description = inputDescription.value.trim() || "(説明文を入力してください)";
+
+            const manifestObj = {
+                "id": "./",
+                "name": name,
+                "short_name": shortName,
+                "description": description,
+                "lang": "ja",
+                "start_url": "./index.html",
+                "scope": "./",
+                "display": "standalone",
+                "orientation": "any",
+                "background_color": "#ffffff",
+                "theme_color": "#ffffff",
+                "prefer_related_applications": false,
+                "icons": [
+                    { "src": "./icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+                    { "src": "./icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+                    { "src": "./maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+                    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+                ]
+            };
+
+            return JSON.stringify(manifestObj, null, 2);
+        }
+
+        function getSwContent() {
+            const prefix = inputPrefix.value.trim() || 'app';
+            const cacheName = prefix + '-pwa-v1';
+
+            return 'const CACHE_NAME = "' + cacheName + '";\n' +
+'const APP_SHELL = [\n' +
+'  "./",\n' +
+'  "./index.html",\n' +
+'  "./manifest.json",\n' +
+'  "./icon.svg",\n' +
+'  "./icon-192x192.png",\n' +
+'  "./icon-512x512.png",\n' +
+'  "./apple-touch-icon.png",\n' +
+'  "./maskable-512x512.png"\n' +
+'];\n\n' +
+'self.addEventListener("install", event => {\n' +
+'  event.waitUntil((async () => {\n' +
+'    const cache = await caches.open(CACHE_NAME);\n' +
+'    await cache.addAll(APP_SHELL);\n' +
+'    await self.skipWaiting();\n' +
+'  })());\n' +
+'});\n\n' +
+'self.addEventListener("activate", event => {\n' +
+'  event.waitUntil((async () => {\n' +
+'    const keys = await caches.keys();\n' +
+'    await Promise.all(keys.filter(key => key.startsWith("' + prefix + '-pwa-") && key !== CACHE_NAME)\n' +
+'      .map(key => caches.delete(key)));\n' +
+'    await self.clients.claim();\n' +
+'  })());\n' +
+'});\n\n' +
+'self.addEventListener("fetch", event => {\n' +
+'  const request = event.request;\n' +
+'  if (request.method !== "GET") return;\n\n' +
+'  const url = new URL(request.url);\n' +
+'  if (url.origin !== self.location.origin) return;\n\n' +
+'  if (request.mode === "navigate") {\n' +
+'    event.respondWith((async () => {\n' +
+'      try {\n' +
+'        const response = await fetch(request);\n' +
+'        if (response && response.ok) {\n' +
+'          const cache = await caches.open(CACHE_NAME);\n' +
+'          cache.put("./index.html", response.clone());\n' +
+'        }\n' +
+'        return response;\n' +
+'      } catch (_) {\n' +
+'        return (await caches.match(request)) ||\n' +
+'               (await caches.match("./index.html")) ||\n' +
+'               new Response("オフラインです。初回にオンラインでアプリを開いてキャッシュしてください。", {\n' +
+'                 status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" }\n' +
+'               });\n' +
+'      }\n' +
+'    })());\n' +
+'    return;\n' +
+'  }\n\n' +
+'  event.respondWith((async () => {\n' +
+'    const cached = await caches.match(request);\n' +
+'    if (cached) return cached;\n' +
+'    try {\n' +
+'      const response = await fetch(request);\n' +
+'      if (response && response.ok) {\n' +
+'        const cache = await caches.open(CACHE_NAME);\n' +
+'        cache.put(request, response.clone());\n' +
+'      }\n' +
+'      return response;\n' +
+'    } catch (_) {\n' +
+'      return new Response("このファイルはオフラインキャッシュにありません。", {\n' +
+'        status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" }\n' +
+'      });\n' +
+'    }\n' +
+'  })());\n' +
+'});';
+        }
+
+        function getIndexContent() {
+            if (!rawUserHtml) {
+                return '<!-- index.html を左側のエリアから読み込んでください -->';
+            }
+
+            let html = rawUserHtml;
+
+            // Head PWA Tags (1, 2, 3)
+            const headTags = '\n    <!-- 1. Webアプリマニフェストの読み込み -->\n' +
+                             '    <link rel="manifest" href="./manifest.json">\n' +
+                             '    <!-- 2. iOS（Apple端末）向けホーム画面アイコンの指定 -->\n' +
+                             '    <link rel="apple-touch-icon" href="./apple-touch-icon.png">\n' +
+                             '    <!-- 3. ブラウザタブ用ファビコン（アイコン）の指定 -->\n' +
+                             '    <link rel="icon" type="image/svg+xml" href="./icon.svg">\n';
+
+            // Service Worker Registration Script (4)
+            const swScript = '\n    <!-- 4. Service Worker登録処理 -->\n' +
+                             '    <script>\n' +
+                             '        function registerServiceWorker() {\n' +
+                             '            if (\'serviceWorker\' in navigator) {\n' +
+                             '                navigator.serviceWorker.register(\'./sw.js\')\n' +
+                             '                    .then((reg) => {\n' +
+                             '                        console.log(\'Service Worker registered successfully:\', reg.scope);\n' +
+                             '                    })\n' +
+                             '                    .catch((err) => {\n' +
+                             '                        console.error(\'Service Worker registration failed:\', err);\n' +
+                             '                    });\n' +
+                             '            }\n' +
+                             '        }\n' +
+                             '        window.addEventListener(\'load\', function() {\n' +
+                             '            registerServiceWorker();\n' +
+                             '        });\n' +
+                             '    <\/script>\n';
+
+            // 1, 2, 3: Insert head tags before </head>
+            if (!html.includes('href="./manifest.json"') && !html.includes('rel="manifest"')) {
+                if (html.includes('</head>')) {
+                    html = html.replace('</head>', headTags + '</head>');
+                } else if (html.includes('<body')) {
+                    html = html.replace('<body', headTags + '<body');
+                } else {
+                    html = headTags + html;
+                }
+            }
+
+            // 4: Insert Service Worker Registration script before </body>
+            if (!html.includes('registerServiceWorker()')) {
+                if (html.includes('</body>')) {
+                    html = html.replace('</body>', swScript + '</body>');
+                } else {
+                    html += swScript;
+                }
+            }
+
+            return html;
+        }
+
+        function updateOutputs() {
+            validateForm();
+
+            currentFilename.textContent = activeTab === 'index' ? 'index.html' : (activeTab === 'manifest' ? 'manifest.json' : 'sw.js');
+            
+            let content = '';
+            if (activeTab === 'index') content = getIndexContent();
+            else if (activeTab === 'manifest') content = getManifestContent();
+            else if (activeTab === 'sw') content = getSwContent();
+
+            codeOutput.textContent = content;
+        }
+
+        function downloadFile(filename, content) {
+            const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        downloadFileBtn.addEventListener('click', () => {
+            if (!validateForm()) {
+                showToast("未入力の項目があるか、HTMLファイルが選択されていません", true);
                 return;
             }
+            const filename = activeTab === 'index' ? 'index.html' : (activeTab === 'manifest' ? 'manifest.json' : 'sw.js');
+            const content = activeTab === 'index' ? getIndexContent() : (activeTab === 'manifest' ? getManifestContent() : getSwContent());
+            downloadFile(filename, content);
+            showToast(filename + ' をダウンロードしました');
+        });
 
-            const textToCopy = dayNumbers.join(',');
-
+        copyCodeBtn.addEventListener('click', () => {
+            const content = activeTab === 'index' ? getIndexContent() : (activeTab === 'manifest' ? getManifestContent() : getSwContent());
+            
+            // Clipboard copy implementation with fallback
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    showToast(`「${textToCopy}」をコピーしました`);
+                navigator.clipboard.writeText(content).then(() => {
+                    showToast("コードをクリップボードにコピーしました");
                 }).catch(() => {
-                    fallbackCopy(textToCopy);
+                    fallbackCopy(content);
                 });
             } else {
-                fallbackCopy(textToCopy);
+                fallbackCopy(content);
             }
-        }
+        });
 
         function fallbackCopy(text) {
             const textarea = document.createElement('textarea');
             textarea.value = text;
             textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
             document.body.appendChild(textarea);
             textarea.focus();
             textarea.select();
             try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    showToast(`「${text}` + "をコピーしました");
-                } else {
-                    showToast("コピーに失敗しました", true);
-                }
+                document.execCommand('copy');
+                showToast("コードをクリップボードにコピーしました");
             } catch (err) {
                 showToast("コピーに失敗しました", true);
             }
             document.body.removeChild(textarea);
         }
 
-        function showToast(message, isError = false) {
-            toastMessage.textContent = message;
-            if (isError) {
-                toast.classList.remove('bg-slate-900');
-                toast.classList.add('bg-rose-600');
-            } else {
-                toast.classList.remove('bg-rose-600');
-                toast.classList.add('bg-slate-900');
+        downloadAllBtn.addEventListener('click', () => {
+            if (!validateForm()) {
+                showToast("未入力の項目があるか、HTMLファイルが選択されていません", true);
+                return;
             }
-            
-            toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
-            toast.classList.add('opacity-100', 'translate-y-0');
+            downloadFile('index.html', getIndexContent());
+            setTimeout(() => downloadFile('manifest.json', getManifestContent()), 200);
+            setTimeout(() => downloadFile('sw.js', getSwContent()), 400);
+            showToast("全3ファイルをダウンロードしました");
+        });
 
-            setTimeout(() => {
-                toast.classList.remove('opacity-100', 'translate-y-0');
-                toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
-            }, 2500);
-        }
+        // Initialize display
+        updateOutputs();
     </script>
 </body>
 </html>
