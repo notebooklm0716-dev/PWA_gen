@@ -1,8 +1,8 @@
 {
   "id": "./",
   "name": "汎用PWAジェネレーター",
-  "short_name": "PWA化",
-  "description": "index.html として作成されたアプリをPWA化する",
+  "short_name": "PWAアプリ化",
+  "description": "index.htmlアプリをPWAアプリ化する",
   "lang": "ja",
   "start_url": "./index.html",
   "scope": "./",
