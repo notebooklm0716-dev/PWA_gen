@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>汎用 PWA ジェネレーター</title>
+    <!-- PWA: GitHub Pages のプロジェクトURLでも動く相対パス -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+    <link rel="icon" type="image/svg+xml" href="./icon.svg">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts Inter -->
@@ -363,20 +368,15 @@
             const cacheName = prefix + '-pwa-v1';
 
             return 'const CACHE_NAME = "' + cacheName + '";\n' +
-'const APP_SHELL = [\n' +
-'  "./",\n' +
-'  "./index.html",\n' +
-'  "./manifest.json",\n' +
-'  "./icon.svg",\n' +
-'  "./icon-192x192.png",\n' +
-'  "./icon-512x512.png",\n' +
-'  "./apple-touch-icon.png",\n' +
-'  "./maskable-512x512.png"\n' +
-'];\n\n' +
+'const CORE_ASSETS = ["./", "./index.html", "./manifest.json"];\n' +
+'const OPTIONAL_ASSETS = ["./icon.svg", "./icon-192x192.png", "./icon-512x512.png", "./apple-touch-icon.png", "./maskable-512x512.png"];\n\n' +
 'self.addEventListener("install", event => {\n' +
 '  event.waitUntil((async () => {\n' +
 '    const cache = await caches.open(CACHE_NAME);\n' +
-'    await cache.addAll(APP_SHELL);\n' +
+'    await cache.addAll(CORE_ASSETS);\n' +
+'    for (const asset of OPTIONAL_ASSETS) {\n' +
+'      try { await cache.add(asset); } catch (error) { console.warn("Optional PWA asset not cached:", asset); }\n' +
+'    }\n' +
 '    await self.skipWaiting();\n' +
 '  })());\n' +
 '});\n\n' +
@@ -438,48 +438,82 @@
 
             let html = rawUserHtml;
 
-            // Head PWA Tags (1, 2, 3)
-            const headTags = '\n    <!-- 1. Webアプリマニフェストの読み込み -->\n' +
-                             '    <link rel="manifest" href="./manifest.json">\n' +
-                             '    <!-- 2. iOS（Apple端末）向けホーム画面アイコンの指定 -->\n' +
-                             '    <link rel="apple-touch-icon" href="./apple-touch-icon.png">\n' +
-                             '    <!-- 3. ブラウザタブ用ファビコン（アイコン）の指定 -->\n' +
-                             '    <link rel="icon" type="image/svg+xml" href="./icon.svg">\n';
+            // HTML内の既存タグを確認し、必要なタグだけを個別に追加する
+            function hasLinkTag(rel, type) {
+                const links = html.match(/<link\b[^>]*>/gi) || [];
+                return links.some(tag => {
+                    const relMatch = tag.match(/\brel\s*=\s*(["'])(.*?)\1/i);
+                    const typeMatch = tag.match(/\btype\s*=\s*(["'])(.*?)\1/i);
+                    const relValues = relMatch ? relMatch[2].toLowerCase().split(/\s+/) : [];
+                    if (!relValues.includes(rel.toLowerCase())) return false;
+                    return !type || (typeMatch && typeMatch[2].toLowerCase() === type.toLowerCase());
+                });
+            }
 
-            // Service Worker Registration Script (4)
-            const swScript = '\n    <!-- 4. Service Worker登録処理 -->\n' +
-                             '    <script>\n' +
-                             '        function registerServiceWorker() {\n' +
-                             '            if (\'serviceWorker\' in navigator) {\n' +
-                             '                navigator.serviceWorker.register(\'./sw.js\')\n' +
-                             '                    .then((reg) => {\n' +
-                             '                        console.log(\'Service Worker registered successfully:\', reg.scope);\n' +
-                             '                    })\n' +
-                             '                    .catch((err) => {\n' +
-                             '                        console.error(\'Service Worker registration failed:\', err);\n' +
-                             '                    });\n' +
-                             '            }\n' +
-                             '        }\n' +
-                             '        window.addEventListener(\'load\', function() {\n' +
-                             '            registerServiceWorker();\n' +
-                             '        });\n' +
-                             '    <\/script>\n';
+            const headTags = [];
+            if (!hasLinkTag('manifest')) {
+                headTags.push('    <link rel="manifest" href="./manifest.json">');
+            }
+            if (!hasLinkTag('apple-touch-icon')) {
+                headTags.push('    <link rel="apple-touch-icon" href="./apple-touch-icon.png">');
+            }
+            if (!hasLinkTag('icon', 'image/svg+xml')) {
+                headTags.push('    <link rel="icon" type="image/svg+xml" href="./icon.svg">');
+            }
 
-            // 1, 2, 3: Insert head tags before </head>
-            if (!html.includes('href="./manifest.json"') && !html.includes('rel="manifest"')) {
-                if (html.includes('</head>')) {
-                    html = html.replace('</head>', headTags + '</head>');
-                } else if (html.includes('<body')) {
-                    html = html.replace('<body', headTags + '<body');
+            // <head> の閉じタグ直前へ追加。headがないHTMLにも対応する
+            if (headTags.length > 0) {
+                const tagsToInsert = '\n    <!-- PWA設定 -->\n' + headTags.join('\n') + '\n';
+                if (/<\/head\s*>/i.test(html)) {
+                    html = html.replace(/<\/head\s*>/i, tagsToInsert + '</head>');
+                } else if (/<html\b[^>]*>/i.test(html)) {
+                    html = html.replace(/<html\b[^>]*>/i, match => match + '\n<head>\n' + tagsToInsert + '</head>\n');
                 } else {
-                    html = headTags + html;
+                    html = '<head>\n' + tagsToInsert + '</head>\n' + html;
                 }
             }
 
-            // 4: Insert Service Worker Registration script before </body>
-            if (!html.includes('registerServiceWorker()')) {
-                if (html.includes('</body>')) {
-                    html = html.replace('</body>', swScript + '</body>');
+            // 既存のService Worker登録処理がなければ、既存スクリプトと共存する形で追加
+            const hasSwRegistration =
+                /navigator\s*\.\s*serviceWorker\s*\.\s*register\s*\(/i.test(html) ||
+                /navigator\s*\[\s*['"]serviceWorker['"]\s*\]\s*\.\s*register\s*\(/i.test(html);
+
+            if (!hasSwRegistration && !html.includes('PWA_GENERATOR_SW_REGISTRATION')) {
+                const swScript =
+                    '\n<!-- PWA_GENERATOR_SW_REGISTRATION -->\n' +
+                    '<script>\n' +
+                    '(function () {\n' +
+                    '    function registerPwaServiceWorker() {\n' +
+                    '        if (!("serviceWorker" in navigator)) return;\n' +
+                    '        navigator.serviceWorker.register("./sw.js")\n' +
+                    '            .then(function (registration) {\n' +
+                    '                console.log("Service Worker registered successfully:", registration.scope);\n' +
+                    '            })\n' +
+                    '            .catch(function (error) {\n' +
+                    '                console.error("Service Worker registration failed:", error);\n' +
+                    '            });\n' +
+                    '    }\n' +
+                    '    // window.onload を上書きせず、既存アプリの初期化処理と共存させる\n' +
+                    '    window.addEventListener("load", registerPwaServiceWorker);\n' +
+                    '})();\n' +
+                    '<\\/script>\n';
+
+                if (/<\/body\s*>/i.test(html)) {
+                    html = html.replace(/<\/body\s*>/i, swScript + '
+    <!-- PWA_GENERATOR_SELF_SW_REGISTRATION -->
+    <script>
+    window.addEventListener('load', function () {
+        if (!('serviceWorker' in navigator)) return;
+        navigator.serviceWorker.register('./sw.js')
+            .then(function (registration) {
+                console.log('Service Worker registered:', registration.scope);
+            })
+            .catch(function (error) {
+                console.error('Service Worker registration failed:', error);
+            });
+    });
+    </script>
+</body>');
                 } else {
                     html += swScript;
                 }
