@@ -1,19 +1,14 @@
-const CACHE_NAME = "pwa_generator-pwa-v1";
-const APP_SHELL = [
-  "./",
-  "./index.html",
-  "./manifest.json",
-  "./icon.svg",
-  "./icon-192x192.png",
-  "./icon-512x512.png",
-  "./apple-touch-icon.png",
-  "./maskable-512x512.png"
-];
+const CACHE_NAME = "pwa_gen-pwa-v1";
+const CORE_ASSETS = ["./", "./index.html", "./manifest.json"];
+const OPTIONAL_ASSETS = ["./icon.svg", "./icon-192x192.png", "./icon-512x512.png", "./apple-touch-icon.png", "./maskable-512x512.png"];
 
 self.addEventListener("install", event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(APP_SHELL);
+    await cache.addAll(CORE_ASSETS);
+    for (const asset of OPTIONAL_ASSETS) {
+      try { await cache.add(asset); } catch (error) { console.warn("Optional PWA asset not cached:", asset); }
+    }
     await self.skipWaiting();
   })());
 });
@@ -21,7 +16,7 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter(key => key.startsWith("pwa_generator-pwa-") && key !== CACHE_NAME)
+    await Promise.all(keys.filter(key => key.startsWith("pwa_gen-pwa-") && key !== CACHE_NAME)
       .map(key => caches.delete(key)));
     await self.clients.claim();
   })());
