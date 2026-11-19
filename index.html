@@ -340,12 +340,13 @@
         }
 
         function getManifestContent() {
+            const idPrefix = (typeof inputPrefix !== "undefined" && inputPrefix.value.trim()) || 'app';
             const name = inputName.value.trim() || "(アプリ名を入力してください)";
             const shortName = inputShortName.value.trim() || "(短縮名を入力してください)";
             const description = inputDescription.value.trim() || "(説明文を入力してください)";
 
             const manifestObj = {
-                "id": "./",
+                "id": "./" + idPrefix,
                 "name": name,
                 "short_name": shortName,
                 "description": description,
@@ -360,8 +361,7 @@
                 "icons": [
                     { "src": "./icon-192x192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
                     { "src": "./icon-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-                    { "src": "./maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
-                    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+                    { "src": "./maskable-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
                 ]
             };
 
