@@ -7,8 +7,13 @@
     <!-- PWA: GitHub Pages のプロジェクトURLでも動く相対パス -->
     <link rel="manifest" href="./manifest.json">
     <meta name="theme-color" content="#ffffff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="PWAジェネ">
     <link rel="apple-touch-icon" href="./apple-touch-icon.png">
     <link rel="icon" type="image/svg+xml" href="./icon.svg">
+    <link rel="icon" href="./favicon.ico" sizes="any">
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Google Fonts Inter -->
@@ -128,7 +133,7 @@
                     </label>
                     <div class="flex items-center gap-2">
                         <input type="text" id="input-prefix" placeholder="例: my-app" class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition">
-                        <span class="text-xs text-slate-400 font-mono bg-slate-900 px-2.5 py-2 border border-slate-700 rounded-xl">-pwa-v1</span>
+                        <span class="text-xs text-slate-400 font-mono bg-slate-900 px-2.5 py-2 border border-slate-700 rounded-xl">-pwa-v2</span>
                     </div>
                     <span id="err-prefix" class="text-[11px] text-rose-400 hidden">キャッシュ識別子を入力してください（半角英数字・ハイフン）</span>
                 </div>
@@ -365,11 +370,13 @@
 
         function getSwContent() {
             const prefix = inputPrefix.value.trim() || 'app';
-            const cacheName = prefix + '-pwa-v1';
+            const cacheName = prefix + '-pwa-v2';
 
             return 'const CACHE_NAME = "' + cacheName + '";\n' +
+'const CACHE_PREFIX = "' + prefix + '-pwa-";\n' +
 'const CORE_ASSETS = ["./", "./index.html", "./manifest.json"];\n' +
-'const OPTIONAL_ASSETS = ["./icon.svg", "./icon-192x192.png", "./icon-512x512.png", "./apple-touch-icon.png", "./maskable-512x512.png"];\n\n' +
+'const OPTIONAL_ASSETS = ["./icon.svg", "./icon-192x192.png", "./icon-512x512.png", "./apple-touch-icon.png", "./maskable-512x512.png", "./favicon.ico"];\n' +
+'\n' +
 'self.addEventListener("install", event => {\n' +
 '  event.waitUntil((async () => {\n' +
 '    const cache = await caches.open(CACHE_NAME);\n' +
@@ -377,22 +384,84 @@
 '    for (const asset of OPTIONAL_ASSETS) {\n' +
 '      try { await cache.add(asset); } catch (error) { console.warn("Optional PWA asset not cached:", asset); }\n' +
 '    }\n' +
+'    // index.html が参照しているファイル(CDNのJS/CSS・Webフォント・画像など)も\n' +
+'    // 初回のうちに保存しておく。これで「1回開けばオフラインでも起動できる」ようになる\n' +
+'    await precacheReferencedAssets(cache);\n' +
 '    await self.skipWaiting();\n' +
 '  })());\n' +
-'});\n\n' +
+'});\n' +
+'\n' +
 'self.addEventListener("activate", event => {\n' +
 '  event.waitUntil((async () => {\n' +
 '    const keys = await caches.keys();\n' +
-'    await Promise.all(keys.filter(key => key.startsWith("' + prefix + '-pwa-") && key !== CACHE_NAME)\n' +
+'    await Promise.all(keys.filter(key => key.startsWith(CACHE_PREFIX) && key !== CACHE_NAME)\n' +
 '      .map(key => caches.delete(key)));\n' +
 '    await self.clients.claim();\n' +
 '  })());\n' +
-'});\n\n' +
+'});\n' +
+'\n' +
+'// 1件だけキャッシュに保存する(失敗しても全体は止めない)\n' +
+'async function cacheOne(cache, url) {\n' +
+'  if (await cache.match(url)) return;\n' +
+'  try {\n' +
+'    await cache.add(url);\n' +
+'  } catch (_) {\n' +
+'    // CORSで取得できない場合は opaque 応答として保存を試みる\n' +
+'    try { await cache.add(new Request(url, { mode: "no-cors" })); } catch (error) { /* 保存できなくても続行 */ }\n' +
+'  }\n' +
+'}\n' +
+'\n' +
+'// index.html 内の src / href をたどって、参照先を先読み保存する\n' +
+'async function precacheReferencedAssets(cache) {\n' +
+'  let html = "";\n' +
+'  try {\n' +
+'    const res = (await cache.match("./index.html")) || (await fetch("./index.html"));\n' +
+'    html = await res.text();\n' +
+'  } catch (_) {\n' +
+'    return;\n' +
+'  }\n' +
+'  const urls = new Set();\n' +
+'  const re = /(?:src|href)\\s*=\\s*"([^"]+)"/gi;\n' +
+'  let m;\n' +
+'  while ((m = re.exec(html)) !== null) {\n' +
+'    const ref = m[1];\n' +
+'    if (/^(data:|blob:|#|mailto:|javascript:)/i.test(ref)) continue;\n' +
+'    try { urls.add(new URL(ref, self.registration.scope).href); } catch (_) { /* URLとして解釈できなければ無視 */ }\n' +
+'  }\n' +
+'  for (const url of urls) {\n' +
+'    await cacheOne(cache, url);\n' +
+'    // CSSファイルなら、中で参照しているフォント等の url(...) も保存する\n' +
+'    try {\n' +
+'      const cached = await cache.match(url);\n' +
+'      const type = cached ? (cached.headers.get("Content-Type") || "") : "";\n' +
+'      if (cached && (type.includes("text/css") || url.split("?")[0].endsWith(".css"))) {\n' +
+'        const css = await cached.clone().text();\n' +
+'        const urlRe = /url\\(\\s*[\'"]?([^\'")]+)[\'"]?\\s*\\)/g;\n' +
+'        let um;\n' +
+'        while ((um = urlRe.exec(css)) !== null) {\n' +
+'          const ref = um[1];\n' +
+'          if (/^(data:|#)/i.test(ref)) continue;\n' +
+'          try { await cacheOne(cache, new URL(ref, url).href); } catch (_) { /* 解釈できなければ無視 */ }\n' +
+'        }\n' +
+'      }\n' +
+'    } catch (_) { /* CSSとして読めなければ無視 */ }\n' +
+'  }\n' +
+'}\n' +
+'\n' +
+'// キャッシュに入れてよい応答か(通常の200、またはCDN等のopaque応答)\n' +
+'function isCacheable(response) {\n' +
+'  return response && (response.status === 200 || response.type === "opaque");\n' +
+'}\n' +
+'\n' +
 'self.addEventListener("fetch", event => {\n' +
 '  const request = event.request;\n' +
-'  if (request.method !== "GET") return;\n\n' +
+'  if (request.method !== "GET") return;\n' +
+'  // Chromeの仕様回避: only-if-cached かつ別オリジンの要求は扱わない\n' +
+'  if (request.cache === "only-if-cached" && request.mode !== "same-origin") return;\n' +
+'\n' +
 '  const url = new URL(request.url);\n' +
-'  if (url.origin !== self.location.origin) return;\n\n' +
+'\n' +
+'  // ページ遷移: ネットワーク優先、失敗したらキャッシュ(オフライン起動)\n' +
 '  if (request.mode === "navigate") {\n' +
 '    event.respondWith((async () => {\n' +
 '      try {\n' +
@@ -411,24 +480,50 @@
 '      }\n' +
 '    })());\n' +
 '    return;\n' +
-'  }\n\n' +
+'  }\n' +
+'\n' +
+'  // 同一オリジンのファイル: キャッシュ優先、無ければ取得して保存\n' +
+'  if (url.origin === self.location.origin) {\n' +
+'    event.respondWith((async () => {\n' +
+'      const cached = await caches.match(request);\n' +
+'      if (cached) return cached;\n' +
+'      try {\n' +
+'        const response = await fetch(request);\n' +
+'        if (isCacheable(response)) {\n' +
+'          const cache = await caches.open(CACHE_NAME);\n' +
+'          cache.put(request, response.clone());\n' +
+'        }\n' +
+'        return response;\n' +
+'      } catch (_) {\n' +
+'        return new Response("このファイルはオフラインキャッシュにありません。", {\n' +
+'          status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" }\n' +
+'        });\n' +
+'      }\n' +
+'    })());\n' +
+'    return;\n' +
+'  }\n' +
+'\n' +
+'  // 別オリジン(CDNライブラリ・Webフォント等): キャッシュ優先で返し、裏で最新化する\n' +
 '  event.respondWith((async () => {\n' +
-'    const cached = await caches.match(request);\n' +
-'    if (cached) return cached;\n' +
-'    try {\n' +
-'      const response = await fetch(request);\n' +
-'      if (response && response.ok) {\n' +
-'        const cache = await caches.open(CACHE_NAME);\n' +
+'    const cache = await caches.open(CACHE_NAME);\n' +
+'    const cached = await cache.match(request);\n' +
+'    const networkPromise = fetch(request).then(response => {\n' +
+'      if (isCacheable(response)) {\n' +
 '        cache.put(request, response.clone());\n' +
 '      }\n' +
 '      return response;\n' +
-'    } catch (_) {\n' +
-'      return new Response("このファイルはオフラインキャッシュにありません。", {\n' +
-'        status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" }\n' +
-'      });\n' +
+'    }).catch(() => null);\n' +
+'    if (cached) {\n' +
+'      event.waitUntil(networkPromise);\n' +
+'      return cached;\n' +
 '    }\n' +
+'    const response = await networkPromise;\n' +
+'    if (response) return response;\n' +
+'    return new Response("このファイルはオフラインキャッシュにありません。", {\n' +
+'      status: 503, headers: { "Content-Type": "text/plain; charset=utf-8" }\n' +
+'    });\n' +
 '  })());\n' +
-'});';
+'});\n';
         }
 
         function getIndexContent() {
@@ -459,6 +554,37 @@
             }
             if (!hasLinkTag('icon', 'image/svg+xml')) {
                 headTags.push('    <link rel="icon" type="image/svg+xml" href="./icon.svg">');
+            }
+            if (!/favicon\.ico/i.test(html)) {
+                headTags.push('    <link rel="icon" href="./favicon.ico" sizes="any">');
+            }
+
+            // メタタグ(name属性)の有無を確認する
+            function hasMetaTag(name) {
+                const metas = html.match(/<meta\b[^>]*>/gi) || [];
+                return metas.some(tag => {
+                    const nameMatch = tag.match(/\bname\s*=\s*(["'])(.*?)\1/i);
+                    return nameMatch && nameMatch[2].toLowerCase() === name.toLowerCase();
+                });
+            }
+
+            if (!hasMetaTag('theme-color')) {
+                headTags.push('    <meta name="theme-color" content="#ffffff">');
+            }
+            if (!hasMetaTag('mobile-web-app-capable')) {
+                headTags.push('    <meta name="mobile-web-app-capable" content="yes">');
+            }
+            if (!hasMetaTag('apple-mobile-web-app-capable')) {
+                headTags.push('    <meta name="apple-mobile-web-app-capable" content="yes">');
+            }
+            if (!hasMetaTag('apple-mobile-web-app-status-bar-style')) {
+                headTags.push('    <meta name="apple-mobile-web-app-status-bar-style" content="default">');
+            }
+            if (!hasMetaTag('apple-mobile-web-app-title')) {
+                const appTitle = inputShortName.value.trim() || inputName.value.trim();
+                if (appTitle) {
+                    headTags.push('    <meta name="apple-mobile-web-app-title" content="' + appTitle.replace(/"/g, '&quot;') + '">');
+                }
             }
 
             // <head> の閉じタグ直前へ追加。headがないHTMLにも対応する
@@ -496,7 +622,7 @@
                     '    // window.onload を上書きせず、既存アプリの初期化処理と共存させる\n' +
                     '    window.addEventListener("load", registerPwaServiceWorker);\n' +
                     '})();\n' +
-                    '<\\/script>\n';
+                    '<\/script>\n';
 
                 if (/<\/body\s*>/i.test(html)) {
                     html = html.replace(/<\/body\s*>/i, swScript + '</body>');
