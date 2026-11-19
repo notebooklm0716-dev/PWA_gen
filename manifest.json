@@ -1,5 +1,5 @@
 {
-  "id": "./",
+  "id": "./PWA_gen",
   "name": "汎用PWAジェネ",
   "short_name": "PWAジェネ",
   "description": "index.htmlをPWAアプリ化",
